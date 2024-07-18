@@ -74,6 +74,15 @@ export __arch=aarch64
 # fails for mesa
 ```
 
+### ScummVM
+
+```
+./sdl.sh scummvm_build
+./sdl.sh mkimage ovl/rootfs0 ovl/sdl ovl/scummvm
+./sdl.sh qemu
+# In the VM
+/usr/local/bin/scummvm
+```
 
 ## Graphics in qemu
 
