@@ -10,7 +10,7 @@ Works:
 * Build with `libc` (native)
 * Build with `musl` for both `x86_64` and `aarch64`
 * Draw oriented SDL tests, and `kcmcube` works in a x86_64 VM
-* Mouse SDL tests work for `x86_64`
+* Mouse SDL tests work for `libc`
 * `ScummVM` builds and starts
 
 Problems:
@@ -183,11 +183,8 @@ DRI = Direct Rendering Infrastructure
 * https://gist.github.com/miguelmartin75/6946310
 * https://unix.stackexchange.com/questions/33596/no-framebuffer-device-how-to-enable-it
 * https://wiki.libsdl.org/SDL2/FAQUsingSDL
-* https://github.com/deniskropp/DirectFB
 * https://forums.raspberrypi.com/viewtopic.php?t=268356
-* https://dri.freedesktop.org/libdrm/libdrm-2.4.120.tar.xz
 * https://docs.mesa3d.org/download.html
-* https://gitlab.com/ricardoquesada/odroid-misc/-/blob/master/kmsdrm.md
 * https://en.wikipedia.org/wiki/Direct_Rendering_Manager
 * https://github.com/CuarzoSoftware/SRM
 
