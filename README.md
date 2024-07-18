@@ -5,10 +5,21 @@ Rock 4 se. This means cross-compile from scratch with `musl` lib.
 
 ### This is a Work in Progress (WIP)
 
-Local build (libc) and `musl` build for x86_64 works. SDL tests (not
-all), and `kcmcube` works in a x86_64 VM. Build "mesa" for `aarch64`
-fails. The `ScummVM` builds and starts, but input (mouse, kbd) doesn't
-work.
+Works:
+
+* Build with `libc` (native)
+* Build with `musl` for both `x86_64` and `aarch64`
+* Draw oriented SDL tests, and `kcmcube` works in a x86_64 VM
+* Mouse SDL tests work for `x86_64`
+* `ScummVM` builds and starts
+
+Problems:
+
+* Mouse SDL tests doesn't work for `musl`
+* Run on `aarch64` target is not tested
+* Input (mouse, kbd) doesn't work for `ScummVM`
+* Audio is not tested
+* (much, much more...)
 
 
 ## Build
@@ -70,8 +81,7 @@ TESTS=yes ./sdl.sh mkimage ovl/rootfs0 ovl/sdl
 Build with musl for aarch64:
 ```
 export __arch=aarch64
-./sdl.sh rebuild
-# fails for mesa
+./sdl.sh rebuild --libs
 ```
 
 ### ScummVM
