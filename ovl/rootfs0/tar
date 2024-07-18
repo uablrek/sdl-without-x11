@@ -1,0 +1,31 @@
+#! /bin/sh
+# NOTE: A common pattern is to specify "-" (stdout) as out-file,
+#  so there must be NO log printouts to stdout!
+
+dir=$(dirname $0); dir=$(readlink -f $dir)
+tmp=/tmp/tmp/$USER/ovltar_$$
+die() {
+	echo "ERROR: $*" >&2
+	rm -rf $tmp
+	exit 1
+}
+log() {
+	echo "INFO: $*" >&2
+}
+test -n "$1" || die "No out-file"
+sh=$dir/../../sdl.sh
+test -x $sh || die "Not executable [$sh]"
+$sh musl_install $tmp
+mkdir -p $tmp
+
+if test "$__musl" != "yes"; then
+	mkdir -p $tmp/lib64 $tmp/bin
+	cp -L /lib64/ld-linux-x86-64.so.2 $tmp/lib64
+	cp -L /usr/sbin/ldconfig.real $tmp/bin/ldconfig
+fi
+
+cp -r $dir/* $tmp
+cd $tmp
+tar --exclude='tar' --exclude='README.md' -cf "$1" *
+cd $dir
+rm -rf $tmp
