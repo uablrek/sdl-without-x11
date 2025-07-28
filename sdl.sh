@@ -60,6 +60,7 @@ cmd_env() {
 		__bbcfg=$dir/config/$ver_busybox \
 		__sysd=$WS/sys \
 		__kvm=kvm \
+		__patchd=$dir/patches \
 		musldir=$GOPATH/src/github.com/richfelker/musl-cross-make
 	eset \
 		__kbin=$__kobj/arch/$__arch/boot/bzImage \
@@ -104,7 +105,8 @@ cmd_versions() {
 		ver_scummvm=scummvm-2.8.1 \
 		ver_flux=flux-master \
 		ver_kmscube=kmscube-master \
-		ver_diskim=diskim-1.0.0
+		ver_diskim=diskim-1.0.0 \
+		ver_strace=strace-6.10
 	test "$cmd" != "versions" && return 0
 	set | grep -E "^($opts)="
 	test "$__brief" = "yes" && return 0
@@ -158,6 +160,10 @@ cdsrc() {
 		else
 			tar -C $WS -xf $f || die "Unpack [$f]"
 		fi
+		if test -r "$__patchd/$1.patch"; then
+			log "Apply patch [$1.patch]"
+			patch -d $WS/$1 -b -p1 < $__patchd/$1.patch
+		fi
 	fi
 	cmd_pkgconfig
 	cd $WS/$1
@@ -174,8 +180,23 @@ cmd_rebuild() {
 	test "$__libs" = "yes" && return 0
 	$me build2 --tests || die "build2 --tests"
 	$me kmscube_build || die kmscube
+	test "$__arch" = "aarch64" && return 0
 	$me busybox_build || die busybox_build
 	$me kernel_build || die kernel_build
+}
+##   strip <dir>
+##     Recursive architecture and lib sensitive strip
+cmd_strip() {
+	test -n "$1" || die "No dir"
+	test -d "$1" || die "Not a directory [$1]"
+	local strip=strip
+	test "$__musl" = "yes" && \
+		strip=$musldir/$__arch/bin/$__arch-linux-musl-strip
+	local f
+	cd $1
+	for f in $(find . -type f -executable); do
+		file $f | grep -q ELF && $strip $f
+	done
 }
 ##   pkgconfig <cmd>
 ##     Fixup pkgconfig files, and set $PKG_CONFIG_LIBDIR
@@ -520,7 +541,7 @@ cmd_mesa_build() {
 	if ! test -d build; then
 		meson setup $musl_meson build -Dplatforms='' -Dllvm=disabled \
 			-Degl-native-platform=drm -Dglx=disabled \
-			-Dgallium-drivers='swrast,virgl,kmsro' -Dvideo-codecs='' \
+			-Dgallium-drivers='swrast,virgl,kmsro,v3d' -Dvideo-codecs='' \
 			-Dxmlconfig=disabled -Dvulkan-drivers='' -Dfreedreno-kmds='virtio' \
 			-Dzstd=disabled || die "meson setup"
 	fi
@@ -555,6 +576,14 @@ cmd_zlib_build() {
 	env $musl_cc ./configure
 	make -j$(nproc) $musl_cc || die make
 	make install prefix=$sysd
+}
+##   strace_build
+cmd_strace_build() {
+	cdsrc $ver_strace
+	test -r Makefile || ./configure $musl_at --enable-mpers=no \
+		|| die "configure"
+	make -j$(nproc) || die make
+	make install DESTDIR=$__sysd || die "make install"
 }
 
 ##

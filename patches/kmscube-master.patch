@@ -1,0 +1,20 @@
+--- kmscube-master/drm-common.c.orig	2024-09-08 11:01:59.978357031 +0200
++++ kmscube-master/drm-common.c	2024-09-08 11:03:49.864434758 +0200
+@@ -179,7 +179,7 @@
+ {
+ 	drmDevicePtr devices[MAX_DRM_DEVICES] = { NULL };
+ 	int num_devices, fd = -1;
+-
++	printf("find_drm_render_device\n");
+ 	num_devices = drmGetDevices2(0, devices, MAX_DRM_DEVICES);
+ 	if (num_devices < 0) {
+ 		printf("drmGetDevices2 failed: %s\n", strerror(-num_devices));
+@@ -205,7 +205,7 @@
+ {
+ 	drmDevicePtr devices[MAX_DRM_DEVICES] = { NULL };
+ 	int num_devices, fd = -1;
+-
++	printf("find_drm_device\n");
+ 	num_devices = drmGetDevices2(0, devices, MAX_DRM_DEVICES);
+ 	if (num_devices < 0) {
+ 		printf("drmGetDevices2 failed: %s\n", strerror(-num_devices));
