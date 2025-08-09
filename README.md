@@ -36,7 +36,7 @@ or gitlab.
 #kvm -device help | grep virtio | grep gpu
 #eval $(./sdl.sh env | grep -E 'sysd|SDL_WORKSPACE')
 ./sdl.sh rebuild    # (take ~3m on my i9. may take a long time on slower pc's)
-TESTS=yes ./sdl.sh mkimage ovl/rootfs0 ovl/sdl
+./sdl.sh mkimage ovl/rootfs0 ovl/sdl
 ./sdl.sh qemu
 
 # In the VM (console terminal)

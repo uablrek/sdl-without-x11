@@ -44,18 +44,23 @@ test -r $sysd/lib/libSDL2-2.0.so.0 || die "SDL2 not built"
 cp -L $sysd/lib/lib*.so.[0-9] $tmp/lib
 
 d=$sysd/libexec/installed-tests/SDL2
-if test -d $d -a "$TESTS" = "yes"; then
-	cp $d/* $tmp/bin
-	cp $sysd/bin/* $tmp/bin
-fi
+test -x $d/testdraw2 && cp $d/* $tmp/bin
+cp $sysd/bin/* $tmp/bin
+
 
 # Dri support is at different places for native and musl
 if test -d $sysd/lib/x86_64-linux-gnu/dri; then
-	mkdir -p $tmp/usr/local/lib/x86_64-linux-gnu
-	cp -r $sysd/lib/x86_64-linux-gnu/dri $tmp/usr/local/lib/x86_64-linux-gnu
+	mkdir -p $tmp/usr/local/lib/x86_64-linux-gnu/dri
+	for f in swrast_dri.so kms_swrast_dri.so virtio_gpu_dri.so; do
+		cp $sysd/lib/x86_64-linux-gnu/dri/$f \
+			$tmp/usr/local/lib/x86_64-linux-gnu/dri
+	done
 elif test -d $sysd/lib/dri; then
-	mkdir -p $tmp/usr/local/lib
-	cp -r $sysd/lib/dri $tmp/usr/local/lib
+	mkdir -p $tmp/usr/local/lib/dri
+	for f in swrast_dri.so kms_swrast_dri.so virtio_gpu_dri.so v3d_dri.so; do
+		cp $sysd/lib/dri/$f $tmp/usr/local/lib/dri
+	done
+	#cp $sysd/lib/dri/* $tmp/usr/local/lib/dri
 fi
 
 if test "$__musl" != "yes"; then
@@ -75,6 +80,8 @@ if test "$__musl" != "yes"; then
 	test -r $tmp/lib64/libudev.so.1 || \
 		cp /usr/lib/x86_64-linux-gnu/libudev.so.1 $tmp/lib
 fi
+
+$sh strip $tmp
 
 cp -r $dir/* $tmp
 cd $tmp
