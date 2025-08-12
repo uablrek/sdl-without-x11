@@ -1,0 +1,15 @@
+#! /bin/sh
+/bin/busybox echo "==== Initrd  ===="
+/bin/busybox mkdir -p /sbin /proc /sys /tmp /dev /usr/bin /usr/sbin
+/bin/busybox --install -s
+mount -t sysfs sysfs /sys
+mount -t proc procfs /proc
+mdev -s
+test -b /dev/vda2 || exec /bin/sh
+mkdir -p /mnt
+mount /dev/vda2 /mnt || exec /bin/sh
+test -r /mnt/rootfs.tar || exec /bin/sh
+mkdir -p /root
+mount -t tmpfs /dev/newroot /root
+tar -C /root -o -xf /mnt/rootfs.tar
+exec switch_root /root /init

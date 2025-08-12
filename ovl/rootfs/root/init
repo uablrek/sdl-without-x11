@@ -1,0 +1,19 @@
+#! /bin/sh
+/bin/busybox echo "Qemu VM starting..."
+/bin/busybox mkdir -p /proc /sys /tmp /dev/pts /dev/shm /var/log \
+	/sbin /usr/bin /usr/sbin /dev/mqueue
+/bin/busybox --install -s
+mount -t sysfs sysfs /sys
+mount -t proc procfs /proc
+mdev -s
+
+mkdir -p /run /var/log/dumps /var/tmp
+ln -s /run /var/run
+
+mount -o remount -w /
+mount /dev/pts
+#mount -t cgroup2 cgroup2 /sys/fs/cgroup
+#sysctl -p > /dev/null
+#ldconfig
+
+exec /sbin/init

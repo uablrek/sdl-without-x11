@@ -1,0 +1,36 @@
+#! /bin/sh
+# NOTE: A common pattern is to specify "-" (stdout) as out-file,
+#  so there must be NO log printouts to stdout!
+
+dir=$(dirname $0); dir=$(readlink -f $dir)
+cd $dir
+tmp=/tmp/tmp/$USER/ovl_$$
+
+die() {
+	echo "ERROR: $*" >&2
+	rm -rf $tmp
+	exit 1
+}
+log() {
+	echo "INFO: $*" >&2
+}
+test -n "$1" || die "No out-file"
+qemu=$(readlink -f $dir/../../qemu.sh)
+test -x $qemu || die "Not executable [$qemu]"
+eval $($qemu env | grep -E '(WS|__arch)=')
+eval $($qemu versions --brief)
+bb=$WS/$ver_busybox/busybox
+test -x $bb || die "Not executable [$bb]"
+
+mkdir -p $tmp/bin
+cp $bb $tmp/bin
+cp -R root/* $tmp
+
+if test "$__arch" = "aarch64"; then
+	sed -i -e 's,ttyS0,ttyAMA0,' $tmp/etc/inittab
+fi
+
+cd $tmp
+tar cf "$1" *
+cd $dir
+rm -rf $tmp

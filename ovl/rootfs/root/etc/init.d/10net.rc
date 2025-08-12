@@ -1,0 +1,27 @@
+#! /bin/sh
+. ./etc/profile
+ip link show > /dev/null 2>&1 || return
+ip link set lo up
+#ip addr add 127.0.0.0/8 dev lo
+inetd
+
+# Wait for eth0
+begin=$(date +%s)
+while ! ip link show eth0 > /dev/null; do
+	sleep 4
+	now=$(date +%s)
+	elapsed=$((now - begin))
+	if test $elapsed -gt 20; then
+		echo "No eth0, giving up..."
+		exit 1
+	fi
+done
+
+echo 0 > /proc/sys/net/ipv6/conf/eth0/accept_dad
+ip link set eth0 up
+udhcpc -t 5 -s /etc/udhcpc.script -qf > /var/log/udhcpc.log
+
+. ./etc/profile
+if test -n "$serverid"; then
+	rdate $serverid || rdate time.nist.gov
+fi

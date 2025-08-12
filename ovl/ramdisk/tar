@@ -13,17 +13,5 @@ log() {
 	echo "INFO: $*" >&2
 }
 test -n "$1" || die "No out-file"
-sh=$dir/../../sdl.sh
-test -x $sh || die "Not executable [$sh]"
-eval $($sh env)
-eval $($sh versions --brief)
-
-mkdir -p $tmp/bin
-bb=$SDL_WORKSPACE/$__arch/$ver_busybox/busybox
-test -x $bb || die "Not executable [$bb]"
-cp $bb $tmp/bin
-
-cd $tmp
-tar -cf "$1" *
 cd $dir
-rm -rf $tmp
+tar --exclude='tar' -cf "$1" *

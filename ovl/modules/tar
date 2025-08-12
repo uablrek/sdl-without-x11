@@ -13,18 +13,11 @@ log() {
 	echo "INFO: $*" >&2
 }
 test -n "$1" || die "No out-file"
-sh=$dir/../../sdl.sh
-test -x $sh || die "Not executable [$sh]"
-$sh musl_install $tmp
-mkdir -p $tmp
+qemu=$(readlink -f $dir/../../qemu.sh)
+test -x $qemu || die "Not executable [$qemu]"
 
-if test "$__musl" != "yes"; then
-	mkdir -p $tmp/lib64 $tmp/bin
-	cp -L /lib64/ld-linux-x86-64.so.2 $tmp/lib64
-	cp -L /usr/sbin/ldconfig.real $tmp/bin/ldconfig
-fi
+$qemu modules-install --dest=$tmp
 
-cp -r $dir/* $tmp
 cd $tmp
 tar --exclude='tar' --exclude='README.md' -cf "$1" *
 cd $dir
