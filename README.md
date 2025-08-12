@@ -1,67 +1,66 @@
 # SDL without X11 (or Wayland)
 
 Build SDL without X11 for a small VM, and ultimately for RPi4 and
-Rock 4 se. This means cross-compile from scratch with `musl` lib.
+Rock 4se. This means cross-compile from scratch with `musl` lib.
 
 ### This is a Work in Progress (WIP)
 
 Works:
 
-* Build with `libc` (native)
+* Build with `libc` for `x86_64` (native)
 * Build with `musl` for both `x86_64` and `aarch64`
-* Draw oriented SDL tests, and `kcmcube` works in a x86_64 VM
-* Mouse SDL tests work for `libc`
+* Some SDL tests, and works in qemu for both architectures with musl
 * `ScummVM` builds and starts
+* `kmscube` works
 
 Problems:
 
+* SDL tests segv's for native build
 * Mouse SDL tests doesn't work for `musl`
-* Run on `aarch64` target is not tested
 * Input (mouse, kbd) doesn't work for `ScummVM`
 * Audio is not tested
 * (much, much more...)
 
+## Help scripts
+
+```
+./admin.sh           # Help printout
+./admin.sh env       # Current environment
+./qemu.sh            # Help printout
+./qemu.sh env        # Current environment
+# all options are long and *must* have a '=' if they take a parameter
+./admin.sh env --musl --arch=aarch64
+# options can be specified as environment variables
+export __musl=yes
+export __arch=aarch64
+./admin.sh env       # same as above
+```
 
 ## Build
 
-Download if needed to $HOME/Downloads, or $ARCHIVE:
+Download archives to $HOME/Downloads, or $ARCHIVE:
 ```
-./sdl.sh versions
+./admin.sh versions
+./qemu.sh versions
 ```
 Libs with version "master" are taken from the "Code" button on github
 or gitlab.
 
 ```
+./admin.sh rebuild    # (take ~3m on my i9)
 #stty intr ^D  # To stop `ctrl-C` from exiting qemu
-#kvm -device help | grep virtio | grep gpu
-#eval $(./sdl.sh env | grep -E 'sysd|SDL_WORKSPACE')
-./sdl.sh rebuild    # (take ~3m on my i9. may take a long time on slower pc's)
-./sdl.sh mkimage ovl/rootfs0 ovl/sdl
-./sdl.sh qemu
+./qemu.sh run --graphic
 
 # In the VM (console terminal)
-testdisplayinfo
 kmscube
-testdraw2
-testsprite2
-testmouse
-testwm2
-```
-
-Built libs and includes are installed in a "system directory"
-(`--sysd`). Later builds uses the sysd, usually via `pkgconfig`.
-
-```
-eval $(./sdl.sh env | grep -E '.*sysd|SDL_WORKSPACE')
-ls $__sysd
-./sdl.sh pkgconfig pkg-config --libs --cflags egl
+# (sdl tests all segv!)
 ```
 
 ### Musl
 
 Build musl cross-compilers
 ```
-eval $(./sdl.sh env | grep musldir)
+eval $(./admin.sh env | grep musldir)
 git clone --depth 1 https://github.com/richfelker/musl-cross-make.git $musldir
 cd $musldir
 make -j$(nproc) TARGET=aarch64-linux-musl
@@ -73,23 +72,41 @@ make -j$(nproc) TARGET=x86_64-linux-musl install OUTPUT=$PWD/x86_64
 Build with musl for x86_64:
 ```
 export __musl=yes
-./sdl.sh rebuild
-TESTS=yes ./sdl.sh mkimage ovl/rootfs0 ovl/sdl
-./sdl.sh qemu
+./admin.sh rebuild
+./qemu.sh run --graphic
+# In the VM (console terminal)
+kmscube
+testdisplayinfo
+testdraw2
+testsprite2
+testmouse         # (doesn't work)
+testwm2
 ```
 
 Build with musl for aarch64:
 ```
+export __musl=yes
 export __arch=aarch64
-./sdl.sh rebuild --libs
+./admin.sh rebuild
+./qemu.sh run --graphic
+```
+
+
+Built libs and includes are installed in a "system directory"
+(`--sysd`). Later builds uses the sysd, usually via `pkgconfig`.
+
+```
+eval $(./admin.sh env | grep -E '.*sysd|SDL_WORKSPACE')
+ls $__sysd
+./admin.sh pkgconfig pkg-config --libs --cflags egl
 ```
 
 ### ScummVM
 
 ```
-./sdl.sh scummvm_build
-./sdl.sh mkimage ovl/rootfs0 ovl/sdl ovl/scummvm
-./sdl.sh qemu
+./admin.sh scummvm_build
+./admin.sh mkimage ovl/scummvm
+./qemu.sh run --graphic
 # In the VM
 /usr/local/bin/scummvm
 ```
@@ -110,6 +127,9 @@ https://www.kraxel.org/blog/). They are *very good*, even if they are old.
 * [virtio-gpu and qemu graphics in 2021](
   https://www.kraxel.org/blog/2021/05/virtio-gpu-qemu-graphics-update/)
 
+```
+qemu-system-x86_64 -device help | grep virtio | grep gpu
+```
 
 ## Mesa
 
@@ -129,10 +149,10 @@ cross-compiled. However [libudev-zero](https://github.com/illiliti/libudev-zero)
 provides a replacement.
 
 ```
-./sdl.sh libudev_build
+./admin.sh libudev_build
 # or
-./sdl.sh libudev_build --musl
-./sdl.sh pkgconfig pkg-config --libs --cflags libudev
+./admin.sh libudev_build --musl
+./admin.sh pkgconfig pkg-config --libs --cflags libudev
 ```
 
 ## Framebuffer
@@ -142,38 +162,7 @@ https://www.kernel.org/doc/Documentation/fb/framebuffer.txt). It's
 basically obsolete and of no use. There is no support for framebuffer
 in SDL2+.
 
-Build the kernel with:
-
-```
-> Device Drivers > Graphics support
-  [*] Direct Rendering Manager (XFree86 ...
-  [*] Enable legacy fbdev support
-  [*] DRM Support for bochs dispi vga interface (qemu stdvga)
-  [*] Bootup logo
-```
-
-and start qemu with `-vga std` or `-device virtio-gpu-pci`.
-
-
-Test:
-```
-fbset
-dd if=/dev/random of=/dev/fb0
-```
-
-### DirectFB
-
-Is an abandoned cludge, don't use it!
-
-The main branch doesn't build
-([issue](https://github.com/deniskropp/DirectFB/issues/24)), but v1.7
-does.
-
-```
-./sdl.sh directfb_build
-```
-
-## References
+## More info
 
 DRI = Direct Rendering Infrastructure
 
