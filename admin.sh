@@ -91,21 +91,17 @@ cmd_env() {
 }
 versions() {
 	eset \
-		ver_busybox=busybox-1.36.1 \
 		ver_mesa=mesa-24.1.4 \
 		ver_sdl2=SDL2-2.30.1 \
 		ver_libdrm=libdrm-2.4.120 \
 		ver_libsamplerate=libsamplerate-0.2.2 \
 		ver_libudev=libudev-zero-1.0.3 \
 		ver_drminfo=drminfo-8-1 \
-		ver_directfb=DirectFB-DIRECTFB_1_7_7 \
 		ver_libpciaccess=libpciaccess-libpciaccess-0.18.1 \
 		ver_expat=expat-2.6.2 \
 		ver_zlib=zlib-1.3.1 \
 		ver_scummvm=scummvm-2.8.1 \
-		ver_flux=flux-master \
 		ver_kmscube=kmscube-master \
-		ver_diskim=diskim-1.0.0 \
 		ver_strace=strace-6.10
 }
 ##   versions [--brief]
@@ -129,7 +125,6 @@ https://github.com/libexpat/libexpat
 https://github.com/madler/zlib
 https://github.com/scummvm/scummvm
 https://gitlab.freedesktop.org/mesa/kmscube
-https://github.com/lgekman/diskim
 Local clones:
 github.com/richfelker/musl-cross-make
 
@@ -187,7 +182,7 @@ cmd_rebuild() {
 	$me kmscube_build || die kmscube
 	cmd_kernel_build
 	cmd_busybox_build
-	cmd_initrd_build
+	cmd_mkimage
 }
 ##   strip <dir>
 ##     Recursive architecture and lib sensitive strip
@@ -239,7 +234,8 @@ cmd_busybox_build() {
 ##     unpack the application to a ramdisk
 cmd_mkimage() {
 	admin=$me $qemu initrd-build ovl/ramdisk || die initrd-build
-	admin=$me $qemu mkimage --size=400MiB ovl/rootfs ovl/admin-install $@
+	admin=$me $qemu mkimage --size=400MiB ovl/rootfs ovl/admin-install $@ \
+		|| die mkimage
 }
 ##   install [--dest=] [--force] [--base-libs-only]
 ##     Install base libs (including the loader) and built items
@@ -264,12 +260,17 @@ install() {
 	install_${__arch}_$lib $1
 	test "$__base_libs_only" = "yes" || install_sys $1
 }
+is_native() {
+	test "$__musl" != "yes" -a "$__arch" = "x86_64"
+}
 install_sys() {
 	# Libs goes to /lib, except for native install, which uses
 	# /lib/x86_64-linux-gnu
+	if is_native; then
+		install_sys_native $@
+		return
+	fi
 	local d=$1/lib
-	test "$__musl" != "yes" -a "$__arch" = "x86_64" && \
-		d=$1/lib/x86_64-linux-gnu
 	mkdir -p $d
 	# We assume (for now) that all libs are installed in /usr/local
 	local sys=$__sysd/usr/local
@@ -279,7 +280,41 @@ install_sys() {
 	# Copy the "dri" sub-dir
 	d=$1/usr/local/lib
 	mkdir -p $d/dri
-	cp dri/virtio_gpu_dri.so dri/kms_swrast_dri.so dri/swrast_dri.so $d/dri
+	local f
+	for f in virtio_gpu_dri.so kms_swrast_dri.so swrast_dri.so ; do
+		test -x dri/$f || die "Not executable [$PWD/dri/$f]"
+		cp dri/$f $d/dri
+	done
+	# Copy programs
+	test -d $sys/bin || return 0
+	mkdir -p $1/bin
+	cd $sys/bin
+	cp * $1/bin
+	# Copy the sdl2 tests if they are built
+	local testd=$sys/libexec/installed-tests/SDL2
+	if test -x $testd/testdraw2; then
+		cp $testd/* $1/bin
+	fi
+	return 0
+}
+install_sys_native() {
+	local f d=$1/lib/x86_64-linux-gnu
+	mkdir -p $d
+	# We assume (for now) that all libs are installed in /usr/local
+	local sys=$__sysd/usr/local
+	test -d $sys/lib || die "Nothing built?"
+	# libs are built both in $sys/lib and $sys/lib/x86_64-linux-gnu
+	cd $sys/lib
+	cp $(find . | grep -E '^./lib.*\.so\.[0-9]+$') $d
+	cd x86_64-linux-gnu
+	cp $(find . | grep -E '^./lib.*\.so\.[0-9]+$') $d
+	# Copy the "dri" sub-dir
+	d=$1/usr/local/lib/x86_64-linux-gnu
+	mkdir -p $d/dri
+	for f in virtio_gpu_dri.so kms_swrast_dri.so swrast_dri.so ; do
+		test -x dri/$f || die "Not executable [$PWD/dri/$f]"
+		cp dri/$f $d/dri
+	done
 	# Copy programs
 	test -d $sys/bin || return 0
 	mkdir -p $1/bin
@@ -322,7 +357,7 @@ install_x86_64_gnu() {
 	local d=$1/lib/x86_64-linux-gnu
 	mkdir -p $d
 	local lib
-	for lib in libc.so.6 libm.so.6; do
+	for lib in libc.so.6 libm.so.6 libstdc++.so.6 libgcc_s.so.1; do
 		cp -L /lib/x86_64-linux-gnu/$lib $d || die $lib
 	done
 }
