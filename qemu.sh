@@ -2,8 +2,8 @@
 ##
 ## qemu.sh --
 ##
-##   Help script for running kvm/qemu. This script is intended to
-##   be managed by a parent "admin.sh" script.
+##   Help script for running kvm/qemu. This script works stand-alone,
+##   but is intended to be managed by a parent "admin.sh" script.
 ##
 ##   Even though this script is named "qemu.sh", actually all
 ##   functions except "run", like build-kernel, build-initrd, etc. are
@@ -97,7 +97,9 @@ cmd_env() {
 		__initrd=$WS/initrd.bz2 \
 		__mem=1G \
 		disk=$dir/disk.sh \
-		__image=$WS/hd.img
+		__image=$WS/hd.img \
+		__adr=192.168.55.1/24 \
+		__tap=qtap
 
 	if test "$__arch" = "aarch64"; then
 		eset kernel=$__kobj/arch/arm64/boot/Image.gz
@@ -142,13 +144,15 @@ cmd_versions() {
 		fi
 	done
 }
-##   rebuild [--arch=] [--musl]
-##     Clear and rebuild the kernel and busybox. Default is native build
+##   rebuild [--arch=] [--musl] [ovls...]
+##     Rebuild kernel and busybox. Default is native build
 cmd_rebuild() {
-	rm -rf $WS
-	$me kernel_build || die kernel_build
-	$me busybox_build || die busybox_build
-	log "Everything built OK"
+	local now begin=$(date +%s)
+	$me kernel-build --clean || die kernel-build
+	$me busybox-build --clean || die busybox-build
+	$me initrd-build $@ || die initrd-build
+	now=$(date +%s)
+	log "Qemu built OK in $((now-begin)) sec"
 }
 cmd_kernel_unpack() {
 	test -d $__kdir && return 0	  # (already unpacked)
@@ -378,9 +382,12 @@ cmd_install() {
 	grep -qF "cmd_install()" $admin || die "No install function in [$admin]"
 	$admin install $__dest		# ($__dest is already exported)
 }
-##   mkimage --clean
-##   mkimage [--image=] [--size=128MiB] <ovls...>
-##     Create a hard-disk image
+##   mkimage --clean      # just delete the image
+##   mkimage [--image=] [--size=400MiB] [--tar] <ovls...>
+##     Create a hard-disk image. The disk can be created in 2 ways:
+##     1. A VFAT formatted partition with "rootfs.tar" file
+##     2. An ext4 formatted partition with the rootfs
+##     Option 2 requires "sudo".
 cmd_mkimage() {
 	if test "$__clean" = "yes"; then
 		rm -f $__image
@@ -388,14 +395,21 @@ cmd_mkimage() {
 	fi
 	test -x $disk || die "Not executable [$disk]"
 	rm -f $__image
-	eset __size=128MiB
+	eset __size=400MiB
 	export __image __size
+	if test "$__tar" = "yes"; then
+		mkimage_fat $@
+	else
+		mkimage_ext4 $@
+	fi
+}
+mkimage_fat() {
 	$disk mkimage --fat || die "$disk mkimage"
 	$disk mkfat --p=1 || die "mkfat p1"
 	$disk mkfat --p=2 -- -n qemu-data || die "mkfat p2"
 	test -n "$1" || return 0	# (an empty disk)
 	__dest=$tmp
-	cmd_unpack_ovls $@
+	cmd_unpack_ovls $@ || die "unpack-ovls"
 	__dev=$($disk loop-setup)
 	echo $__dev | grep '/dev/loop' || die loop-setup
 	export __dev
@@ -407,29 +421,47 @@ cmd_mkimage() {
 	$disk unmount --p=2
 	$disk loop-delete
 }
-##   mktap [--bridge=|--adr=] <tap>
-##     Create a network tun/tap device.  The tun/tap device can
-##     optionally be attached to a bridge.
-##     Requires "sudo"!
+mkimage_ext4() {
+	$disk mkimage || die "$disk mkimage"
+	$disk mkfat --p=1 || die "mkfat p1"
+	$disk mkext --p=2 -- -t ext4 -L qemu-data || die "mkext p2"
+	test -n "$1" || return 0	# (an empty disk)
+	__dest=$tmp
+	cmd_unpack_ovls $@ || die "unpack-ovls"
+	__dev=$($disk loop-setup)
+	echo $__dev | grep '/dev/loop' || die loop-setup
+	export __dev
+	local mnt=$($disk mount --p=2)
+	log "Mount at [$mnt]"
+	test -n "$mnt" -a -d "$mnt" || die mount
+	sudo cp -R $tmp/* $mnt
+	sudo chown -R 0:0 $mnt/*
+	$disk unmount --p=2
+	$disk loop-delete
+}
+##   mktap [--bridge=] [--adr=] [--tap=]
+##     Create a tap device and a (optional) bridge. Requires "sudo"!
 cmd_mktap() {
-	test -n "$1" || die "Parameter missing"
-	if ip link show dev $1 > /dev/null 2>&1; then
-		log "Device exists [$1]"
+	if ip link show dev $__tap > /dev/null 2>&1; then
+		log "Device exists [$__tap]"
 		return 0
 	fi
-	if test -n "$__bridge"; then
-		ip link show dev $__bridge > /dev/null 2>&1 \
-			|| die "Bridge does not exist [$__bridge]"
+	sudo ip tuntap add $__tap mode tap user $USER || die "Create [$__tap]"
+	sudo ip link set up $__tap
+
+	# If we don't have a bridge, set the address on the tap device
+	if test -z "$__bridge"; then
+		sudo ip addr add $__adr dev $__tap || die "Add address to tap"
+		return 0
 	fi
-	sudo ip tuntap add $1 mode tap user $USER || die "Create tap"
-	sudo ip link set up $1
-	if test -n "$__bridge"; then
-		sudo ip link set dev $1 master $__bridge || die "Attach to bridge"
-	elif test -n "$__adr"; then
-		local opt
-		echo "$__adr" | grep -q : && opt=-6
-		sudo ip $opt addr add $__adr dev $1 || die "Set address [$__adr]"
-	fi
+	# We have a bridge, let it have the address and attach the tap.
+	ip link show dev $__bridge > /dev/null 2>&1 && \
+		die "Bridge already exist [$__bridge]"
+	sudo ip link add name $__bridge type bridge group_fwd_mask 0x4000 \
+		|| die "Failed to create [$__bridge]"
+	sudo ip link set up $__bridge
+	sudo ip addr add $__adr dev $__bridge || die "Add address to bridge"
+	sudo ip link set dev $__tap master $__bridge || die "Attach to bridge"
 }
 ##   run
 ##     Start a qemu VM. Optionally with files from --root
@@ -452,6 +484,10 @@ qemu_x86_64() {
 	fi
 	test -r "$__image" && \
 		opt="$opt -drive file=$__image,index=0,media=disk,if=virtio,format=raw"
+	if ip link show $__tap > /dev/null 2>&1; then
+		opt="$opt -netdev tap,id=qtap,script=no,ifname=$__tap"
+		opt="$opt -device virtio-net-pci,netdev=qtap"
+	fi
 	exec qemu-system-x86_64 -enable-kvm -M q35 -m $__mem -smp 2 \
 		$opt -append "init=/init $__append" \
 		-monitor none -serial stdio -kernel $kernel  -initrd $__initrd $@
@@ -466,9 +502,14 @@ qemu_aarch64() {
 		opt="$opt -drive if=none,file=$__image,format=raw,id=hd"
 		opt="$opt -device virtio-blk-device,drive=hd"
 	fi
+	if ip link show $__tap > /dev/null 2>&1; then
+		opt="$opt -netdev tap,id=qtap,script=no,ifname=$__tap"
+		opt="$opt -device virtio-net-pci,netdev=qtap"
+	fi
+	local now=$(date +%s)
 	exec qemu-system-aarch64 -cpu cortex-a72 -m $__mem -smp 2 \
 		-machine virt,virtualization=on,secure=off \
-		$opt -append "init=/init $__append" \
+		$opt -append "init=/init boot_time=$now $__append" \
 		-monitor none -serial stdio -kernel $kernel -initrd $__initrd $@
 }
 

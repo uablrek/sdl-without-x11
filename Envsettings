@@ -1,0 +1,11 @@
+h=$PWD
+alias cdh="cd $h"
+alias admin="$h/admin.sh"
+alias qemu="$h/qemu.sh"
+alias disk="$h/disk.sh"
+alias setws="eval \$(admin env | grep WS=); ws=\$WS; echo \$ws"
+alias musl="eval export __musl=yes; setws"
+alias gnu="eval unset __musl; setws"
+alias aarch64="eval export __arch=aarch64; setws"
+alias x86_64="eval unset __arch; setws"
+export __graphic=yes

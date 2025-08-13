@@ -9,14 +9,13 @@ Works:
 
 * Build with `libc` for `x86_64` (native)
 * Build with `musl` for both `x86_64` and `aarch64`
-* Some SDL tests, and works in qemu for both architectures with musl
+* Many SDL tests works in qemu for both architectures
 * `ScummVM` builds and starts
 * `kmscube` works
 
 Problems:
 
-* SDL tests segv's for native build
-* Mouse SDL tests doesn't work for `musl`
+* Mouse SDL tests doesn't work
 * Input (mouse, kbd) doesn't work for `ScummVM`
 * Audio is not tested
 * (much, much more...)
@@ -24,89 +23,75 @@ Problems:
 ## Help scripts
 
 ```
-./admin.sh           # Help printout
-./admin.sh env       # Current environment
-./qemu.sh            # Help printout
-./qemu.sh env        # Current environment
+. ./Envsettings      # For convenient aliases, e.g. for "admin" and "qemu"
+admin                # Help printout
+admin env            # Current environment
+qemu                 # Help printout
+qemu env             # Current environment
 # all options are long and *must* have a '=' if they take a parameter
-./admin.sh env --musl --arch=aarch64
+admin env --musl --arch=aarch64
 # options can be specified as environment variables
 export __musl=yes
 export __arch=aarch64
-./admin.sh env       # same as above
+admin env            # same as above
 ```
 
-## Build
+## Build and run
 
 Download archives to $HOME/Downloads, or $ARCHIVE:
 ```
-./admin.sh versions
-./qemu.sh versions
+admin versions
+qemu versions
 ```
 Libs with version "master" are taken from the "Code" button on github
 or gitlab.
 
 ```
-./admin.sh rebuild    # (take ~3m on my i9)
+admin rebuild    # (take ~140s on my i9/24-cores)
 #stty intr ^D  # To stop `ctrl-C` from exiting qemu
-./qemu.sh run --graphic
-
+qemu run
 # In the VM (console terminal)
 kmscube
-# (sdl tests all segv!)
+ls /bin   # run some sdl tests
+```
+If you build the musl cross-compilers you can test aarch64:
+```
+musl          # (an alias, check Envsettings)
+aarch64
+admin rebuild
+qemu run
+```
+### Dependencies
+
+Dependencies can be very hard in cross-compilation
+environments. Basically you must build all dependent libs yourself.
+
+Built libs and includes are installed in a "system directory"
+(`--sysd`). Later builds uses the sysd, usually via `pkgconfig`.
+
+```
+eval $(admin env | grep __sysd)
+ls $__sysd
+admin pkgconfig pkg-config --libs --cflags expat
 ```
 
-### Musl
+### Musl cross-compilers
 
 Build musl cross-compilers
 ```
 eval $(./admin.sh env | grep musldir)
 git clone --depth 1 https://github.com/richfelker/musl-cross-make.git $musldir
 cd $musldir
-make -j$(nproc) TARGET=aarch64-linux-musl
-make -j$(nproc) TARGET=aarch64-linux-musl install OUTPUT=$PWD/aarch64
-make -j$(nproc) TARGET=x86_64-linux-musl
-make -j$(nproc) TARGET=x86_64-linux-musl install OUTPUT=$PWD/x86_64
+./admin.sh musl-cross-make-build
 ```
-
-Build with musl for x86_64:
-```
-export __musl=yes
-./admin.sh rebuild
-./qemu.sh run --graphic
-# In the VM (console terminal)
-kmscube
-testdisplayinfo
-testdraw2
-testsprite2
-testmouse         # (doesn't work)
-testwm2
-```
-
-Build with musl for aarch64:
-```
-export __musl=yes
-export __arch=aarch64
-./admin.sh rebuild
-./qemu.sh run --graphic
-```
-
-
-Built libs and includes are installed in a "system directory"
-(`--sysd`). Later builds uses the sysd, usually via `pkgconfig`.
-
-```
-eval $(./admin.sh env | grep -E '.*sysd|SDL_WORKSPACE')
-ls $__sysd
-./admin.sh pkgconfig pkg-config --libs --cflags egl
-```
+This takes a long time and should only be done once.
 
 ### ScummVM
 
 ```
-./admin.sh scummvm_build
-./admin.sh mkimage ovl/scummvm
-./qemu.sh run --graphic
+admin scummvm-build
+admin mkimage ovl/scummvm
+qemu run
 # In the VM
 /usr/local/bin/scummvm
 ```
